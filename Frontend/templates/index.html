@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helmet Violation Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .video-container {
+            width: 95%;
+            max-width: 900px;
+            margin: 20px auto;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 0 25px rgba(1, 1, 1, 0.883);
+            background: #000000;
+        }
+        .video-container img {
+            width: 100%;
+            display: block;
+        }
+        .btn-quit {
+            background-color: #ff3b3b; 
+            color: white;
+        }
+        .btn-quit:hover {
+            background-color: #ff1a1a;
+        }
+        /* Style adjustments for disabled buttons */
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Helmet Violation Detection System</h1>
+
+    <div class="upload-box">
+        <form action="/upload" method="POST" enctype="multipart/form-data">
+            <input type="file" name="video" {% if processing %}disabled{% endif %} required>
+            
+            <button type="submit" {% if processing %}disabled{% endif %}>
+                Upload & Detect
+            </button>
+
+            <button type="button" class="btn-quit" onclick="quitDetection()" {% if not processing %}disabled{% endif %}>
+                Quit Detection
+            </button>
+        </form>
+    </div>
+
+    {% if processing %}
+    <div class="processing-box" style="margin-bottom: 10px; padding: 15px;">
+        Processing Video... Live AI View
+    </div>
+    
+    <div class="video-container">
+        <img src="{{ url_for('video_feed') }}" alt="Live Processing Stream">
+    </div>
+    {% endif %}
+
+    {% if not processing %}
+    <div class="cards">
+        {% for v in violations %}
+        <div class="card">
+            <div class="details">
+                <p><strong>Plate:</strong> {{ v.plate }}</p>
+                <p><strong>Violation:</strong> {{ v.violation }}</p>
+                <p><strong>Track ID:</strong> {{ v.track_id }}</p>
+                <p><strong>Time:</strong> {{ v.time }}</p>
+                
+                <button 
+                    data-image="{{ url_for('violation_image', filename=v.image) }}"
+                    onclick="openImage(this.dataset.image)"
+                >
+                    Show Violation
+                </button>
+            </div>
+        </div>
+        {% else %}
+        <div style="text-align: center; width: 100%; font-size: 24px; padding: 20px; color: #ffffff;">
+            No violations found in the database. Upload a video to start!
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div id="imageModal" class="modal">
+        <span class="close" onclick="closeImage()">&times;</span>
+        <img class="modal-content" id="popupImage" alt="Violation Frame">
+    </div>
+
+    <input type="hidden" id="processingStatus" value="{{ 'true' if processing else 'false' }}">
+
+    <script>
+        function openImage(imageSrc) {
+            document.getElementById("imageModal").style.display = "block";
+            document.getElementById("popupImage").src = imageSrc;
+        }
+
+        function closeImage() {
+            document.getElementById("imageModal").style.display = "none";
+            document.getElementById("popupImage").src = "";
+        }
+
+        let statusInterval;
+
+        // Function triggered by the Quit button
+        function quitDetection() {
+            if (statusInterval) clearInterval(statusInterval); // Stop polling
+            fetch('/quit', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    window.location.reload(); // Reload immediately to show cards
+                })
+                .catch(err => console.error("Error quitting:", err));
+        }
+
+        const isProcessing = document.getElementById("processingStatus").value === "true";
+        
+        if (isProcessing) {
+            statusInterval = setInterval(() => {
+                fetch('/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.processing === false) {
+                            clearInterval(statusInterval);
+                            window.location.reload(); 
+                        }
+                    })
+                    .catch(err => console.error("Error checking status:", err));
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
